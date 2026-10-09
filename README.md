@@ -39,14 +39,14 @@ the install-script boilerplate.
 
 | Input | Default | Description |
 |-------|---------|-------------|
-| `version` | `v0.2.6` | baseliner version to install (or `latest`). |
+| `version` | `v0.2.8` | baseliner version to install (or `latest`). |
 | `config` | `baseliner.yaml` | Path to the config file. |
 | `format` | `both` | `json`, `table`, or `both`. |
 | `output-file` | — | Write JSON results here. |
 | `sarif-file` | — | Write SARIF 2.1.0 here (for code scanning). |
 | `fail-under` | — | Exit 1 if any repo scores below this (`0.0`–`1.0`). |
 | `open-issues` | `false` | Open/update a findings issue per repo. |
-| `public-context` | auto | Protect private/internal repos when the output is public. Empty auto-detects from this repo's visibility (on when public, off when private); set `true`/`false` to override. |
+| `public-context` | auto | Protect private/internal repos when the output is public. Empty auto-detects from this repo's visibility (on when public, off when private); set `true` to force it on, or `false` to leave it to `privacy.public_context` in your config (case-insensitive). Any other value fails the step rather than leaving the guard off. Needs baseliner v0.2.1 or later. |
 | `extra-args` | — | Extra arguments appended to `baseliner scan`. |
 | `working-directory` | `.` | Directory to run from. |
 | `github-token` | `${{ github.token }}` | Token for GitHub scanning / `--open-issues`. The default only reaches the repo the workflow runs in; see [Token](#token). |
@@ -80,21 +80,25 @@ precedence over the input's default:
 Scanning only this repo with the default token works, but `open-issues` then
 needs `permissions: issues: write` on the job.
 
-## Upgrading to baseliner v0.2.6
+## Upgrading to baseliner v0.2.8
 
-This version of the action installs baseliner v0.2.6 by default. Two changes can turn
-a green run red:
+This version of the action installs baseliner v0.2.8 by default. For a workflow
+using this action:
 
-- **Exit 2 on undeliverable findings issues.** With `open-issues`, a findings
-  issue that can't be searched for or written now fails the run instead of
-  being logged and ignored. Archived repos and repos with Issues disabled are
-  skipped. The usual cause is the token; see [Token](#token).
-- **`ci_present` fails CI that GitHub isn't running.** Workflows GitHub has
-  disabled no longer count, nor do a fork's workflows it never enabled. Under
-  the default gate or `fail-under`, such a repo can now fail.
+- **New: `policy.ignore_when`** in `baseliner.yaml` skips checks by repo
+  visibility without naming any repo. For example, private repos can skip
+  `license_exists`. See the
+  [policy guide](https://github.com/baselinerhq/baseliner/blob/main/docs/policies.md#ignoring-checks-per-deployment).
+- **A rate-limited scan exits 2** and says how many requests GitHub refused and
+  when the limit resets. Before, it could pass with checks silently `unknown`.
+- **Keep the schedule alive.** GitHub disables a public repo's scheduled
+  workflows after 60 days without repository activity, and scan runs don't
+  count. Add the `keepalive` job from
+  [Keeping the schedule alive](https://github.com/baselinerhq/baseliner/blob/main/docs/control-repo.md#keeping-the-schedule-alive)
+  to the workflow that uses this action.
 
-To stay on the previous release while you fix either, set `version: v0.2.5`.
-See the [v0.2.6 release notes](https://github.com/baselinerhq/baseliner/releases/tag/v0.2.6).
+To stay on the previous release, set `version: v0.2.7`.
+See the [v0.2.8 release notes](https://github.com/baselinerhq/baseliner/releases/tag/v0.2.8).
 
 ## Privacy in public control repos
 

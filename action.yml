@@ -7,8 +7,8 @@ branding:
 
 inputs:
   version:
-    description: "baseliner version to install (e.g. v0.2.6, or 'latest')."
-    default: "v0.2.6"
+    description: "baseliner version to install (e.g. v0.2.8, or 'latest')."
+    default: "v0.2.8"
   config:
     description: "Path to the baseliner config file."
     default: "baseliner.yaml"
@@ -32,7 +32,9 @@ inputs:
       Treat scan output as public, protecting private/internal repos per
       privacy.private_repos (default redact). Leave empty to auto-detect from
       this (the control) repo's visibility: enabled when public, disabled when
-      private/internal. Set 'true'/'false' to override.
+      private/internal. Set 'true' to force it on, or 'false' to leave it to
+      privacy.public_context in the config (case-insensitive); any other value
+      fails the step.
     default: ""
   extra-args:
     description: "Additional arguments appended to `baseliner scan` (optional)."
@@ -82,7 +84,10 @@ runs:
         # only a definitively private/internal repo disables the guard; public
         # or an undeterminable visibility (e.g. token lacks metadata read on a
         # scheduled run) enables it.
-        public="${PUBLIC_CONTEXT_INPUT}"
+        if ! public=$("$GITHUB_ACTION_PATH/scripts/public-context.sh" "$PUBLIC_CONTEXT_INPUT"); then
+          echo "$public" # the ::error:: line
+          exit 1
+        fi
         if [ -z "$public" ]; then
           vis=$(gh api "repos/$GITHUB_REPOSITORY" --jq .visibility 2>/dev/null || true)
           if [ "$vis" = "private" ] || [ "$vis" = "internal" ]; then
@@ -91,7 +96,17 @@ runs:
             public=true
           fi
         fi
-        [ "$public" = "true" ] && args+=(--public-context)
+        # Never pass --public-context=false: the flag outranks the config, so it
+        # would turn off a privacy.public_context: true the user set. When the
+        # guard is not wanted here, pass no flag and hide GITHUB_ACTIONS from
+        # baseliner, which otherwise treats an unset context as public under
+        # Actions; the config then decides, and defaults to off.
+        runner=()
+        if [ "$public" = "true" ]; then
+          args+=(--public-context)
+        else
+          runner=(env -u GITHUB_ACTIONS)
+        fi
 
         # shellcheck disable=SC2206
         [ -n "${{ inputs.extra-args }}" ] && args+=(${{ inputs.extra-args }})
@@ -100,4 +115,4 @@ runs:
         # won't let `env:` override it, so the api-url input is applied here —
         # after the gh visibility lookup above, and for baseliner only.
         [ -n "$API_URL_INPUT" ] && export GITHUB_API_URL="$API_URL_INPUT"
-        "$HOME/.local/bin/baseliner" "${args[@]}"
+        ${runner[@]+"${runner[@]}"} "$HOME/.local/bin/baseliner" "${args[@]}"
